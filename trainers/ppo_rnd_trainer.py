@@ -9,15 +9,12 @@ from agents.ppo import ppo
 from agents.utils.gae import get_gaes
 
 
-def Trainer(actions):
-    return PPO_trainer(actions)
 
-
-class PPO_trainer(tf.keras.Model):
+class ppo_trainer(tf.keras.Model):
     def __init__(self, actions, epochs=3, batch_size=128, update_num=256,
                     gamma=0.99, lambda_=.95, learning_rate=0.0003,
                     grad_clip=0.5, **kargs):
-        super(PPO_trainer, self).__init__()
+        super(ppo_trainer, self).__init__()
 
         self.agent=ppo(actions, **kargs)
 
