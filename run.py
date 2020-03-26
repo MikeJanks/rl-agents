@@ -2,12 +2,12 @@ import tensorflow as tf
 import numpy as np
 import time
 
-from trainers.ppo_trainer import ppo_trainer
+from trainers.ppo_rnd_trainer import Trainer
 from envs import Env
 
 
 env = Env()
-trainer = ppo_trainer(env.action_space.n)
+trainer = Trainer(env.action_space.n)
 running_reward=-21
 steps=0
 for e in range(100000):

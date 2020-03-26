@@ -1,18 +1,17 @@
 import tensorflow as tf
-tf.keras.backend.set_floatx('float64')
 
 from tensorflow import keras
 from tensorflow.keras import layers
 
 from .utils.mish import Mish
 
-class ppo(tf.keras.Model):
+class ppo_intris_value(tf.keras.Model):
     ''' Proximal Policy Optimization '''
     def __init__(self, action_size, img_dim=32,
                     policy_clip=0.2, value_clip=0.2,
                     entropy_beta=0.001, val_discount=1.0, **kargs):
 
-        super(ppo, self).__init__()
+        super(ppo_intris_value, self).__init__()
 
         ''' Hyperparameters '''
         self.action_size  = action_size
@@ -28,16 +27,21 @@ class ppo(tf.keras.Model):
         self.embed_fn.add(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
         self.embed_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
         self.embed_fn.add(layers.Flatten())
-        self.embed_fn.add(layers.Dense(100, activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Dense(100, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
 
         self.policy_fn = keras.Sequential()
-        self.policy_fn.add(layers.Dense(100, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.policy_fn.add(layers.Dense(self.action_size, activation='linear', kernel_initializer='lecun_normal'))
 
         self.value_fn = keras.Sequential()
-        self.value_fn.add(layers.Dense(100, activation=Mish(), kernel_initializer='lecun_normal'))
-        self.value_fn.add(layers.Dense(1, activation='linear', kernel_initializer='lecun_normal'))
+        self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+
+        self.value_extrins_fn = keras.Sequential()
+        self.value_extrins_fn.add(layers.Dense(1, activation='linear', kernel_initializer='lecun_normal'))
+
+        self.value_intrins_fn = keras.Sequential()
+        self.value_intrins_fn.add(layers.Dense(1, activation='linear', kernel_initializer='lecun_normal'))
 
 
 
@@ -47,8 +51,10 @@ class ppo(tf.keras.Model):
         features = self.embed_fn(states)
         logits   = self.policy_fn(features)
         values   = self.value_fn(features)
+        values_e = self.value_extrins_fn(values)
+        values_i = self.value_intrins_fn(values)
 
-        return logits, values
+        return logits, values_e, values_i
 
 
     @tf.function
