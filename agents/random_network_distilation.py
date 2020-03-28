@@ -16,14 +16,14 @@ class random_network_distilation(tf.keras.Model):
         self.predictor_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal', name='predictor_fn_Conv2D_3'))
         self.predictor_fn.add(layers.Flatten())
         self.predictor_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal', name='predictor_fn_Dense_1'))
-        self.predictor_fn.add(layers.Dense(embed_dim, activation='linear', kernel_initializer='lecun_normal', name='predictor_fn_Dense_out'))
+        self.predictor_fn.add(layers.Dense(embed_dim, activation='linear'))
 
         self.target_fn = keras.Sequential()
         self.target_fn.add(layers.Conv2D(32, 8, 4, padding='same', activation=Mish(), kernel_initializer='lecun_normal', name='target_fn_Conv2D_1'))
         self.target_fn.add(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal', name='target_fn_Conv2D_2'))
         self.target_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal', name='target_fn_Conv2D_3'))
         self.target_fn.add(layers.Flatten())
-        self.target_fn.add(layers.Dense(embed_dim, activation='linear', kernel_initializer='lecun_normal', name='target_fn_Dense_out'))
+        self.target_fn.add(layers.Dense(embed_dim, activation='linear'))
         self.target_norm = tf.keras.layers.LayerNormalization()
 
         self.target_fn.trainable=False
@@ -45,7 +45,7 @@ class random_network_distilation(tf.keras.Model):
     def rnd_loss_fn(self, next_states):
         ''' RND Loss '''
         pred    = self.predictor_fn(next_states)
-        target  = tf.stop_gradient(self.target_fn(next_states))
+        target  = self.target_fn(next_states)
         target  = self.target_norm(target)
         loss    = tf.reduce_mean(tf.keras.losses.mse(target, pred))
 

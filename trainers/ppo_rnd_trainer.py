@@ -13,7 +13,7 @@ from agents.utils.gae import get_gaes
 
 class Trainer(tf.keras.Model):
     def __init__(self, actions, epochs=3, batch_size=128, update_num=256,
-                    gamma_e=0.999, gamma_i=0.99, lambda_=.95, learning_rate=0.0003,
+                    gamma_e=0.99, gamma_i=0.99, lambda_=.95, learning_rate=0.0003,
                     grad_clip=0.5, **kargs):
         super(Trainer, self).__init__()
 
@@ -72,14 +72,23 @@ class Trainer(tf.keras.Model):
         rewards_i   = rewards_i / (stddev if stddev!=0 else 1)
 
         self.obvs['next_states'].append(next_state)
-        self.obvs['rewards_e'].append(rewards_e)
+        self.obvs['rewards_e'].append(0)
         self.obvs['rewards_i'].append(rewards_i)
         self.obvs['dones'].append(int(not done))
 
 
 
+    def print_stats(self):
+        print(f"actions:   {self.obvs['actions'][-1]}")
+        print(f"logits:    {self.obvs['logits'][-1]}")
+        print(f"rewards_i: {self.obvs['rewards_i'][-1]}")
+        print(f"values_i:  {self.obvs['values_i'][-1]}")
+
+
+
     def update(self):
         if len(self.obvs['actions']) % self.update_num==0:
+            # self.print_stats()
             start_update=time()
             _, next_value_e, next_value_i = self.agent_ppo(np.array([self.obvs['next_states'][-1]]))
 
@@ -92,10 +101,10 @@ class Trainer(tf.keras.Model):
             init_returns_i, init_advantages_i = get_gaes(np.array(self.obvs['rewards_i']),
                                                 np.array(self.obvs['values_i']),
                                                 np.array([next_value_i]),
-                                                np.ones_like(self.obvs['dones']),
+                                                np.array(self.obvs['dones']),
                                                 gamma=self.gamma_i, lambda_=self.lambda_)
 
-            init_advantages = 2*init_advantages_e + init_advantages_i
+            init_advantages = init_advantages_e + init_advantages_i
             init_advantages = (init_advantages - np.mean(init_advantages)) / (np.std(init_advantages) + 1e-10)
 
             for _ in range(self.epochs):
