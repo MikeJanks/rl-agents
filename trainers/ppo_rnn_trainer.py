@@ -5,7 +5,7 @@ import numpy as np
 from copy import deepcopy
 from time import time
 
-from agents.ppo import ppo
+from agents.ppo_rnn import ppo_rnn
 from agents.utils.gae import get_gaes
 
 
@@ -16,7 +16,7 @@ class Trainer(tf.keras.Model):
                     grad_clip=0.5, **kargs):
         super(Trainer, self).__init__()
 
-        self.agent=ppo(actions, **kargs)
+        self.agent=ppo_rnn(actions, **kargs)
 
         self.epochs=epochs
         self.batch_size=batch_size
@@ -26,6 +26,7 @@ class Trainer(tf.keras.Model):
         self.grad_clip=grad_clip
         self.init_replay_buffer={
             'count': 0,
+            'masks': [],
             'states': [],
             'next_states': [],
             'logits': [],
@@ -42,20 +43,21 @@ class Trainer(tf.keras.Model):
         self.replay_buffer=deepcopy(self.init_replay_buffer)
 
 
-    def action(self, states):
-        logits, values = self.agent(np.array([states]))
+    def action(self, states, hiddens):
+        logits, values, hiddens = self.agent(np.array([[states]]), hiddens, np.array([[1.]]))
 
         values = tf.squeeze(values).numpy()
         logits = tf.squeeze(logits).numpy()
         action = tf.random.categorical([logits], 1)
         action = tf.squeeze(action).numpy()
 
-        return action, values, logits
+        return action, values, logits, hiddens
 
 
 
-    def add(self, state, action, logits, value, next_state, reward, done):
+    def add(self, masks, state, action, logits, value, next_state, reward, done):
         self.replay_buffer['count']+=1
+        self.replay_buffer['masks'].append(masks)
         self.replay_buffer['states'].append(state)
         self.replay_buffer['actions'].append(action)
         self.replay_buffer['logits'].append(logits)
@@ -66,11 +68,11 @@ class Trainer(tf.keras.Model):
 
 
 
-    def update(self):
+    def update(self, hiddens):
         if self.replay_buffer['count'] == self.update_num:
             print(self.replay_buffer["logits"][0])
             start_update=time()
-            _, next_value = self.agent(np.array([self.replay_buffer['next_states'][-1]]))
+            _, next_value, _ = self.agent(np.array([[self.replay_buffer['next_states'][-1]]]), hiddens, np.array([[1.]]))
             
             init_returns, init_advantages = get_gaes(np.array(self.replay_buffer['rewards']),
                                                 np.array(self.replay_buffer['values']),
@@ -82,24 +84,26 @@ class Trainer(tf.keras.Model):
 
             for _ in range(self.epochs):
                 for i in range(0, len(self.replay_buffer['actions']), self.batch_size):
-                    states      = np.array(self.replay_buffer['states'][i:i+self.batch_size])
-                    next_states = np.array(self.replay_buffer['next_states'][i:i+self.batch_size])
-                    actions     = np.array(self.replay_buffer['actions'][i:i+self.batch_size])
-                    old_logits  = np.array(self.replay_buffer['logits'][i:i+self.batch_size])
-                    old_values  = np.array(self.replay_buffer['values'][i:i+self.batch_size])
-                    returns     = init_returns[i:i+self.batch_size]
-                    advantages  = init_advantages[i:i+self.batch_size]
+                    masks       = np.array([self.replay_buffer['masks'][i:i+self.batch_size]])
+                    states      = np.array([self.replay_buffer['states'][i:i+self.batch_size]])
+                    next_states = np.array([self.replay_buffer['next_states'][i:i+self.batch_size]])
+                    actions     = np.array([self.replay_buffer['actions'][i:i+self.batch_size]])
+                    old_logits  = np.array([self.replay_buffer['logits'][i:i+self.batch_size]])
+                    old_values  = np.array([self.replay_buffer['values'][i:i+self.batch_size]])
+                    returns     = np.array([init_returns[i:i+self.batch_size]])
+                    advantages  = np.array([init_advantages[i:i+self.batch_size]])
+                    hiddens     = self.agent.initial_hidden(masks.shape[0])
 
-                    self.step(states, next_states, actions, old_logits, old_values, returns, advantages)
+                    self.step(masks, hiddens, states, next_states, actions, old_logits, old_values, returns, advantages)
             self.reset_replay_buffer()
             print(time()-start_update)
 
 
     @tf.function
-    def step(self, states, next_states, actions, old_logits, old_values, returns, advantages):
+    def step(self, masks, hiddens, states, next_states, actions, old_logits, old_values, returns, advantages):
         a_one_hot = tf.one_hot(actions, self.agent.action_size, axis=-1, dtype=tf.float64)
         with tf.GradientTape() as tape:
-            logits, values = self.agent(states)
+            logits, values, _ = self.agent(states, hiddens, masks)
             values = tf.squeeze(values, axis=-1)
 
             value_loss = self.agent.value_loss_fn(returns, values, old_values)

@@ -2,13 +2,13 @@ import numpy as np
 import cv2
 
 class Preprocess():
-    def __init__(self, length=4, size=32):
-        self.hist=np.zeros((length,size,size,1))
+    def __init__(self, size=32, stacks=4):
+        self.hist=np.zeros((stacks,size,size,1))
         self.size=size
-        self.length=length
+        self.stacks=stacks
 
     def reset(self):
-        self.hist=np.zeros((self.length,self.size,self.size,1))
+        self.hist=np.zeros((self.stacks,self.size,self.size,1))
 
     def __call__(self, img):
         resized = cv2.resize(img, (self.size,self.size), interpolation = cv2.INTER_AREA)

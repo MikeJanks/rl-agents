@@ -6,16 +6,17 @@ from tensorflow.keras import layers
 
 from .utils.mish import Mish
 
-class ppo(tf.keras.Model):
+class ppo_rnn(tf.keras.Model):
     ''' Proximal Policy Optimization '''
     def __init__(self, action_size, img_dim=32,
                     policy_clip=0.2, value_clip=0.2,
                     entropy_beta=0.01, val_discount=1.0, **kargs):
 
-        super(ppo, self).__init__()
+        super(ppo_rnn, self).__init__()
 
         ''' Hyperparameters '''
         self.action_size  = action_size
+        self.value_size   = 1
         self.policy_clip  = policy_clip
         self.value_clip   = value_clip
         self.entropy_beta = entropy_beta
@@ -31,24 +32,46 @@ class ppo(tf.keras.Model):
         self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
 
+        self.rnn_cell = layers.GRUCell(128)
+
         self.policy_fn = keras.Sequential()
         self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.policy_fn.add(layers.Dense(self.action_size, activation='linear', kernel_initializer='lecun_normal'))
 
         self.value_fn = keras.Sequential()
         self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
-        self.value_fn.add(layers.Dense(1, activation='linear', kernel_initializer='lecun_normal'))
+        self.value_fn.add(layers.Dense(self.value_size, activation='linear', kernel_initializer='lecun_normal'))
 
+
+
+    def initial_hidden(self, batch=1):
+        return tf.zeros((batch,128), dtype=tf.float64)
 
 
 
     @tf.function
-    def __call__(self, states):
-        features = self.embed_fn(states)
-        logits   = self.policy_fn(features)
-        values   = self.value_fn(features)
+    def __call__(self, states, hiddens, masks):
+        return_logits_seq = tf.zeros((states.shape[0],0,self.action_size), dtype=tf.float64)
+        return_values_seq = tf.zeros((states.shape[0],0,self.value_size), dtype=tf.float64)
+        for i in range(states.shape[1]):
+            logits, values, hiddens = self.sub_call(states[:,i], hiddens, masks[:,i:1+i])
+            return_logits_seq=tf.concat([return_logits_seq, tf.expand_dims(logits, 1)], axis=1)
+            return_values_seq=tf.concat([return_values_seq, tf.expand_dims(values, 1)], axis=1)
 
-        return logits, values
+        return return_logits_seq, return_values_seq, hiddens
+
+
+    @tf.function
+    def sub_call(self, states, hiddens, masks):
+        masks_h             = tf.abs(masks-1)
+        hiddens             = tf.stop_gradient(masks_h * hiddens) + masks * hiddens
+        hiddens             = hiddens * masks
+        features            = self.embed_fn(states)
+        features, hiddens   = self.rnn_cell(features, states=[hiddens])
+        logits              = self.policy_fn(features)
+        values              = self.value_fn(features)
+
+        return logits, values, hiddens[0]
 
 
     @tf.function

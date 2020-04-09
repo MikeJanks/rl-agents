@@ -60,10 +60,12 @@ class ppo_intris_value(tf.keras.Model):
     @tf.function
     def value_loss_fn(self, returns, values, old_values):
         ''' Value Loss '''
-        values_clip = old_values + tf.clip_by_value(values - old_values, -self.value_clip, self.value_clip)
-        val_loss1   = tf.square(values - returns)
-        val_loss2   = tf.square(values_clip - returns)
-        val_loss    = tf.maximum(val_loss1, val_loss2)
+        # values_clip = old_values + tf.clip_by_value(values - old_values, -self.value_clip, self.value_clip)
+        # val_loss1   = tf.square(values - returns)
+        # val_loss2   = tf.square(values_clip - returns)
+        # val_loss    = tf.maximum(val_loss1, val_loss2)
+
+        val_loss    = tf.keras.losses.mse(returns, values)
         val_loss    = (self.val_discount/2) * tf.reduce_mean(val_loss)
 
         return val_loss
