@@ -2,10 +2,11 @@ import numpy as np
 import cv2
 
 class Preprocess():
-    def __init__(self, size=32, stacks=4):
+    def __init__(self, size=32, stacks=4, return_seq=False):
         self.hist=np.zeros((stacks,size,size,1))
         self.size=size
         self.stacks=stacks
+        self.return_seq=return_seq
 
     def reset(self):
         self.hist=np.zeros((self.stacks,self.size,self.size,1))
@@ -17,6 +18,8 @@ class Preprocess():
         resized = np.reshape(resized, resized.shape + (1,))
         self.hist = np.delete(self.hist, 0, 0)
         self.hist = np.append(self.hist, [resized], axis=0)
-        final_img = np.concatenate(self.hist, axis=0)
-        
-        return final_img
+        if self.return_seq:
+            return self.hist
+        else:
+            final_img = np.concatenate(self.hist, axis=-1)
+            return final_img

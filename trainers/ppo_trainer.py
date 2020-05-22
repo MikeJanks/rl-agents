@@ -11,12 +11,12 @@ from agents.utils.gae import get_gaes
 
 
 class Trainer(tf.keras.Model):
-    def __init__(self, actions, epochs=5, batch_size=128, update_num=512,
-                    gamma=0.99, lambda_=.95, learning_rate=0.0001,
+    def __init__(self, actions, observations, epochs=5, batch_size=64, update_num=256,
+                    gamma=0.99, lambda_=.95, learning_rate=0.003,
                     grad_clip=0.5, **kargs):
         super(Trainer, self).__init__()
 
-        self.agent=ppo(actions, **kargs)
+        self.agent=ppo(actions, observations, **kargs)
 
         self.epochs=epochs
         self.batch_size=batch_size
@@ -37,6 +37,22 @@ class Trainer(tf.keras.Model):
         self.replay_buffer=deepcopy(self.init_replay_buffer)
         self.optimizer = tf.keras.optimizers.Adam(learning_rate, epsilon=1e-10)
         
+          
+    def save_model(self, path):
+        try:
+            self.save_weights(path, save_format='tf')
+            print('Saved!')
+        except:
+            mkdir(path)
+            self.save_weights(path, save_format='tf')
+    
+    
+    def load_model(self, path):
+        try:
+            self.load_weights(path)
+        except:
+            print("\n\nWeights not Found\n")
+            pass
 
     def reset_replay_buffer(self):
         self.replay_buffer=deepcopy(self.init_replay_buffer)
@@ -66,8 +82,8 @@ class Trainer(tf.keras.Model):
 
 
 
-    def update(self):
-        if self.replay_buffer['count'] == self.update_num:
+    def update(self, force_train=False):
+        if self.replay_buffer['count'] == self.update_num or force_train==True :
             print(self.replay_buffer["logits"][0])
             start_update=time()
             _, next_value = self.agent(np.array([self.replay_buffer['next_states'][-1]]))
@@ -81,7 +97,7 @@ class Trainer(tf.keras.Model):
             init_advantages = (init_advantages - np.mean(init_advantages)) / (np.std(init_advantages) + 1e-10)
 
             for _ in range(self.epochs):
-                for i in range(0, len(self.replay_buffer['actions']), self.batch_size):
+                for i in range(0, self.replay_buffer['count'], self.batch_size):
                     states      = np.array(self.replay_buffer['states'][i:i+self.batch_size])
                     next_states = np.array(self.replay_buffer['next_states'][i:i+self.batch_size])
                     actions     = np.array(self.replay_buffer['actions'][i:i+self.batch_size])

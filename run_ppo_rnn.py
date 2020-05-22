@@ -3,10 +3,10 @@ import numpy as np
 import time
 
 from trainers.ppo_rnn_trainer import Trainer
-from envs import Pong as Env
+from envs import Mario as Env
 
 
-env = Env(stacks=4, skips=1)
+env = Env(stacks=1, skips=2)
 trainer = Trainer(env.action_space.n)
 running_reward=-21
 steps=0
@@ -22,8 +22,8 @@ for e in range(100000):
         a, v, l, h = trainer.action(s, h)
 
         n_s, r, done, info = env.step(a)
-        trainer.add(start, s, a, l, v, n_s, r, done)
-        trainer.update(h)
+        trainer.add(start, s, h, a, l, v, n_s, r, done)
+        trainer.update()
         
         start = 1.
         s = n_s

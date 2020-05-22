@@ -8,13 +8,14 @@ from .utils.mish import Mish
 
 class ppo(tf.keras.Model):
     ''' Proximal Policy Optimization '''
-    def __init__(self, action_size, img_dim=32,
+    def __init__(self, action_size, observation_shape, img_dim=32,
                     policy_clip=0.2, value_clip=0.2,
                     entropy_beta=0.01, val_discount=1.0, **kargs):
 
         super(ppo, self).__init__()
 
         ''' Hyperparameters '''
+        self.observation_shape = observation_shape
         self.action_size  = action_size
         self.policy_clip  = policy_clip
         self.value_clip   = value_clip
@@ -24,19 +25,20 @@ class ppo(tf.keras.Model):
 
         ''' Networks '''
         self.embed_fn = keras.Sequential()
-        self.embed_fn.add(layers.Conv2D(32, 8, 4, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Flatten())
-        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        if len(self.observation_shape) == 3:
+            self.embed_fn.add(layers.Conv2D(32, 8, 4, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
+            self.embed_fn.add(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
+            self.embed_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
+            self.embed_fn.add(layers.Flatten())
+        # self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.embed_fn.add(layers.Dense(512, activation=Mish(), kernel_initializer='lecun_normal'))
 
         self.policy_fn = keras.Sequential()
-        self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        # self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.policy_fn.add(layers.Dense(self.action_size, activation='linear', kernel_initializer='lecun_normal'))
 
         self.value_fn = keras.Sequential()
-        self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        # self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.value_fn.add(layers.Dense(1, activation='linear', kernel_initializer='lecun_normal'))
 
 

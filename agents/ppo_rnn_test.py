@@ -1,4 +1,3 @@
-import numpy as np
 import tensorflow as tf
 tf.keras.backend.set_floatx('float64')
 
@@ -26,63 +25,48 @@ class ppo_rnn(tf.keras.Model):
 
         ''' Networks '''
         self.embed_fn = keras.Sequential()
-        self.embed_fn.add(layers.Conv2D(32, 8, 4, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal'))
-        self.embed_fn.add(layers.Flatten())
-        self.embed_fn.add(layers.Dense(512, activation=Mish(), kernel_initializer='lecun_normal'))
-        # self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.embed_fn.add(layers.TimeDistributed(layers.Conv2D(32, 8, 4, padding='same', activation=Mish(), kernel_initializer='lecun_normal')))
+        self.embed_fn.add(layers.TimeDistributed(layers.Conv2D(64, 4, 2, padding='same', activation=Mish(), kernel_initializer='lecun_normal')))
+        self.embed_fn.add(layers.TimeDistributed(layers.Conv2D(64, 3, 1, padding='same', activation=Mish(), kernel_initializer='lecun_normal')))
+        self.embed_fn.add(layers.TimeDistributed(layers.Flatten()))
+        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.embed_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
 
-        self.rnn_cell = layers.GRUCell(512)
+        self.rnn_cell = layers.GRU(128, return_state=True)
 
         self.policy_fn = keras.Sequential()
-        # self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.policy_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.policy_fn.add(layers.Dense(self.action_size, activation='linear', kernel_initializer='lecun_normal'))
 
         self.value_fn = keras.Sequential()
-        # self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
+        self.value_fn.add(layers.Dense(128, activation=Mish(), kernel_initializer='lecun_normal'))
         self.value_fn.add(layers.Dense(self.value_size, activation='linear', kernel_initializer='lecun_normal'))
 
 
 
     def initial_hidden(self, batch=1):
-        return np.zeros((512), dtype=np.float64)
+        return tf.zeros((batch,128), dtype=tf.float64)
 
 
 
     @tf.function
-    def __call__(self, states, hiddens, masks):
-        return_logits_seq = tf.zeros((states.shape[0],0,self.action_size), dtype=tf.float64)
-        return_values_seq = tf.zeros((states.shape[0],0,self.value_size), dtype=tf.float64)
-        for i in range(states.shape[1]):
-            logits, values, hiddens = self.sub_call(states[:,i], hiddens, masks[:,i:1+i])
-            return_logits_seq=tf.concat([return_logits_seq, tf.expand_dims(logits, 1)], axis=1)
-            return_values_seq=tf.concat([return_values_seq, tf.expand_dims(values, 1)], axis=1)
-
-        return return_logits_seq, return_values_seq, hiddens
-
-
-    @tf.function
-    def sub_call(self, states, hiddens, masks):
-        masks_h             = tf.abs(masks-1)
-        hiddens             = tf.stop_gradient(masks_h * hiddens) + masks * hiddens
-        hiddens             = hiddens * masks
+    def __call__(self, states, hiddens):
         features            = self.embed_fn(states)
-        features, hiddens   = self.rnn_cell(features, states=[hiddens])
+        features, hiddens   = self.rnn_cell(features, initial_state=hiddens)
         logits              = self.policy_fn(features)
         values              = self.value_fn(features)
 
-        return logits, values, hiddens[0]
+        return logits, values, hiddens
 
 
     @tf.function
     def value_loss_fn(self, returns, values, old_values):
         ''' Value Loss '''
-        # values_clip = old_values + tf.clip_by_value(values - old_values, -self.value_clip, self.value_clip)
+        values_clip = old_values + tf.clip_by_value(values - old_values, -self.value_clip, self.value_clip)
         val_loss1   = tf.square(values - returns)
-        # val_loss2   = tf.square(values_clip - returns)
-        # val_loss1   = tf.maximum(val_loss1, val_loss2)
-        val_loss    = (self.val_discount/2) * tf.reduce_mean(val_loss1)
+        val_loss2   = tf.square(values_clip - returns)
+        val_loss    = tf.maximum(val_loss1, val_loss2)
+        val_loss    = (self.val_discount/2) * tf.reduce_mean(val_loss)
 
         return val_loss
 
